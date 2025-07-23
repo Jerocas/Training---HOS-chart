@@ -2,10 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>HOS Interactive Chart</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100 p-4 md:p-6">
   <div class="max-w-5xl mx-auto">
@@ -18,21 +18,25 @@
           <input id="drive" type="range" min="0" max="13" value="0" step="0.25" class="w-full">
           <span id="drive-val">0</span> hrs
         </div>
+
         <div>
           <label class="block font-medium">On Duty (Not Driving) (hrs)</label>
           <input id="duty" type="range" min="0" max="14" value="0" step="0.25" class="w-full">
           <span id="duty-val">0</span> hrs
         </div>
+
         <div>
           <label class="block font-medium">Breaks (hrs)</label>
           <input id="break" type="range" min="0" max="4" value="0" step="0.25" class="w-full">
           <span id="break-val">0</span> hrs
         </div>
+
         <div>
           <label class="block font-medium">Off Duty / Sleeper (hrs)</label>
           <input id="off" type="range" min="0" max="14" value="0" step="0.25" class="w-full">
           <span id="off-val">0</span> hrs
         </div>
+
         <div>
           <label class="block font-medium">Split Sleeper Option</label>
           <select id="split" class="w-full p-2 rounded border">
@@ -41,121 +45,134 @@
             <option value="7-3">7/3 Split</option>
           </select>
         </div>
+
         <div class="flex items-center space-x-2">
           <input type="checkbox" id="adverse" class="accent-blue-500">
-          <label for="adverse" class="font-medium">Adverse Conditions Exemption</label>
+          <label for="adverse" class="font-medium">Adverse Conditions Exemption (Add 2 extra driving hrs)</label>
         </div>
+
         <div class="flex items-center space-x-2">
           <input type="checkbox" id="shorthaul" class="accent-blue-500">
-          <label for="shorthaul" class="font-medium">Short-Haul Exemption</label>
+          <label for="shorthaul" class="font-medium">Short-Haul Exemption (Skip 30-min break rule)</label>
         </div>
+
         <div class="mt-4 text-red-600 font-semibold whitespace-pre-line" id="warnings"></div>
       </div>
 
       <div class="bg-white p-4 rounded shadow">
-        <canvas id="timeline"></canvas>
+        <canvas id="timeline" width="400" height="200"></canvas>
       </div>
     </div>
   </div>
 
   <script>
-    window.onload = () => {
-      const drive = document.getElementById('drive');
-      const duty = document.getElementById('duty');
-      const brk = document.getElementById('break');
-      const off = document.getElementById('off');
-      const split = document.getElementById('split');
-      const adverse = document.getElementById('adverse');
-      const shorthaul = document.getElementById('shorthaul');
-      const warnings = document.getElementById('warnings');
+    const drive = document.getElementById('drive');
+    const duty = document.getElementById('duty');
+    const brk = document.getElementById('break');
+    const off = document.getElementById('off');
+    const split = document.getElementById('split');
+    const adverse = document.getElementById('adverse');
+    const shorthaul = document.getElementById('shorthaul');
+    const warnings = document.getElementById('warnings');
 
-      const updateVals = () => {
-        document.getElementById('drive-val').textContent = drive.value;
-        document.getElementById('duty-val').textContent = duty.value;
-        document.getElementById('break-val').textContent = brk.value;
-        document.getElementById('off-val').textContent = off.value;
-      };
+    const updateVals = () => {
+      document.getElementById('drive-val').textContent = drive.value;
+      document.getElementById('duty-val').textContent = duty.value;
+      document.getElementById('break-val').textContent = brk.value;
+      document.getElementById('off-val').textContent = off.value;
+    };
 
-      const ctx = document.getElementById('timeline').getContext('2d');
-      const chart = new Chart(ctx, {
+    const ctx = document.getElementById('timeline').getContext('2d');
+    let chart;
+
+    const initChart = () => {
+      chart = new Chart(ctx, {
         type: 'bar',
         data: {
           labels: Array.from({ length: 24 }, (_, i) => `${i}:00`),
           datasets: [{
             label: 'Activity',
-            backgroundColor: [],
             data: Array(24).fill(1),
-          }],
+            backgroundColor: Array(24).fill('#e5e7eb'),
+            borderWidth: 0
+          }]
         },
         options: {
           responsive: true,
-          plugins: { legend: { display: false } },
-          scales: { y: { display: false } },
-        },
-      });
-
-      const updateChart = () => {
-        const totalHours = 24;
-        const driveHrs = parseFloat(drive.value);
-        const dutyHrs = parseFloat(duty.value);
-        const breakHrs = parseFloat(brk.value);
-        const offHrs = parseFloat(off.value);
-        const colors = [];
-
-        const pushColor = (count, color) => {
-          for (let i = 0; i < count; i++) colors.push(color);
-        };
-
-        pushColor(driveHrs, 'rgba(59,130,246,0.7)');
-        pushColor(dutyHrs, 'rgba(251,191,36,0.7)');
-        pushColor(breakHrs, 'rgba(34,197,94,0.7)');
-        pushColor(offHrs, 'rgba(107,114,128,0.7)');
-        pushColor(totalHours - colors.length, '#e5e7eb');
-
-        chart.data.datasets[0].backgroundColor = colors;
-        chart.update();
-
-        validate();
-      };
-
-      const validate = () => {
-        let warningText = "";
-        const driveHrs = parseFloat(drive.value);
-        const dutyHrs = parseFloat(duty.value);
-        const breakHrs = parseFloat(brk.value);
-        const offHrs = parseFloat(off.value);
-        const splitOpt = split.value;
-        const adverseEnabled = adverse.checked;
-        const shortHaulEnabled = shorthaul.checked;
-
-        const driveLimit = adverseEnabled ? 13 : 11;
-        if (driveHrs > driveLimit) warningText += `Exceeds ${driveLimit}-hour driving limit (Adverse ${adverseEnabled ? 'ON' : 'OFF'}).\n`;
-        if (driveHrs + dutyHrs > 14) warningText += "Exceeds 14-hour work shift.\n";
-
-        if (!shortHaulEnabled && driveHrs > 8 && breakHrs < 0.5) {
-          warningText += "Must take 30-minute break after 8 hrs driving.\n";
-        }
-
-        if (splitOpt !== 'none') {
-          const [part1, part2] = splitOpt.split('-').map(Number);
-          if (!(offHrs >= part1 || offHrs >= part2)) {
-            warningText += `Split berth ${splitOpt} requires at least ${part1} and ${part2} hours of rest.\n`;
+          plugins: {
+            legend: { display: false }
+          },
+          scales: {
+            y: { display: false },
+            x: { display: true }
           }
         }
+      });
+    };
 
-        warnings.textContent = warningText.trim();
+    const updateChart = () => {
+      const totalHours = 24;
+      const driveHrs = parseFloat(drive.value);
+      const dutyHrs = parseFloat(duty.value);
+      const breakHrs = parseFloat(brk.value);
+      const offHrs = parseFloat(off.value);
+      const colors = [];
+
+      const pushColor = (count, color) => {
+        for (let i = 0; i < count; i++) colors.push(color);
       };
 
-      [drive, duty, brk, off, split, adverse, shorthaul].forEach(el => {
-        el.addEventListener('input', () => {
-          updateVals();
-          updateChart();
-        });
-      });
+      pushColor(driveHrs, 'rgba(59,130,246,0.7)'); // Driving - blue
+      pushColor(dutyHrs, 'rgba(251,191,36,0.7)'); // On Duty - yellow
+      pushColor(breakHrs, 'rgba(34,197,94,0.7)'); // Break - green
+      pushColor(offHrs, 'rgba(107,114,128,0.7)'); // Off Duty - gray
+      pushColor(totalHours - colors.length, '#e5e7eb'); // Remaining - light gray
 
-      updateVals();
-      updateChart();
+      chart.data.datasets[0].backgroundColor = colors;
+      chart.update();
+
+      validate();
     };
+
+    const validate = () => {
+      let warningText = "";
+      const driveHrs = parseFloat(drive.value);
+      const dutyHrs = parseFloat(duty.value);
+      const breakHrs = parseFloat(brk.value);
+      const offHrs = parseFloat(off.value);
+      const splitOpt = split.value;
+      const adverseEnabled = adverse.checked;
+      const shortHaulEnabled = shorthaul.checked;
+
+      const driveLimit = adverseEnabled ? 13 : 11;
+
+      if (driveHrs > driveLimit) warningText += `Exceeds ${driveLimit}-hour driving limit (Adverse ${adverseEnabled ? 'ON' : 'OFF'}).\n`;
+      if (driveHrs + dutyHrs > 14) warningText += "Exceeds 14-hour work shift.\n";
+
+      if (!shortHaulEnabled && driveHrs > 8 && breakHrs < 0.5) {
+        warningText += "Must take 30-minute break after 8 hrs driving.\n";
+      }
+
+      if (splitOpt !== 'none') {
+        const [part1, part2] = splitOpt.split('-').map(Number);
+        if (!(offHrs >= part1 || offHrs >= part2)) {
+          warningText += `Split berth ${splitOpt} requires at least ${part1} and ${part2} hours of rest.\n`;
+        }
+      }
+
+      warnings.textContent = warningText.trim();
+    };
+
+    [drive, duty, brk, off, split, adverse, shorthaul].forEach(el => {
+      el.addEventListener('input', () => {
+        updateVals();
+        updateChart();
+      });
+    });
+
+    updateVals();
+    initChart();
+    updateChart();
   </script>
 </body>
 </html>
