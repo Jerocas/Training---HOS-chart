@@ -85,6 +85,17 @@
     const ctx = document.getElementById('timeline').getContext('2d');
     const chart = new Chart(ctx, {
       type: 'bar',
+options: {
+  indexAxis: 'y', // horizontal bars
+  responsive: true,
+  plugins: {
+    legend: { display: false },
+  },
+  scales: {
+    x: { stacked: true },
+    y: { stacked: true },
+  },
+}
       data: {
         labels: Array.from({ length: 24 }, (_, i) => `${i}:00`),
         datasets: [
