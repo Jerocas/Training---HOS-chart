@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>HOS Interactive Chart</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -86,24 +86,22 @@
     const chart = new Chart(ctx, {
       type: 'bar',
       data: {
-        labels: ['HOS Timeline'],
+        labels: [],
         datasets: [
-          { label: 'Driving', backgroundColor: 'rgba(59,130,246,0.7)', data: [0] },
-          { label: 'On Duty', backgroundColor: 'rgba(251,191,36,0.7)', data: [0] },
-          { label: 'Break', backgroundColor: 'rgba(34,197,94,0.7)', data: [0] },
-          { label: 'Off Duty', backgroundColor: 'rgba(107,114,128,0.7)', data: [0] },
-          { label: 'Remaining', backgroundColor: '#e5e7eb', data: [0] },
+          {
+            label: 'Activity',
+            backgroundColor: [],
+            data: [],
+          },
         ],
       },
       options: {
         responsive: true,
-        indexAxis: 'y',
-        scales: {
-          x: { stacked: true, max: 24 },
-          y: { stacked: true },
-        },
         plugins: {
-          legend: { position: 'bottom' },
+          legend: { display: false },
+        },
+        scales: {
+          y: { display: false },
         },
       },
     });
@@ -114,15 +112,23 @@
       const dutyHrs = parseFloat(duty.value);
       const breakHrs = parseFloat(brk.value);
       const offHrs = parseFloat(off.value);
-      const used = driveHrs + dutyHrs + breakHrs + offHrs;
-      const remaining = Math.max(0, totalHours - used);
+      const colors = [];
 
-      chart.data.datasets[0].data = [driveHrs];
-      chart.data.datasets[1].data = [dutyHrs];
-      chart.data.datasets[2].data = [breakHrs];
-      chart.data.datasets[3].data = [offHrs];
-      chart.data.datasets[4].data = [remaining];
+      const pushColor = (count, color) => {
+        for (let i = 0; i < Math.floor(count); i++) colors.push(color);
+      };
 
+      pushColor(driveHrs, 'rgba(59,130,246,0.7)'); // Driving - blue
+      pushColor(dutyHrs, 'rgba(251,191,36,0.7)'); // On Duty - yellow
+      pushColor(breakHrs, 'rgba(34,197,94,0.7)'); // Break - green
+      pushColor(offHrs, 'rgba(107,114,128,0.7)'); // Off Duty - gray
+
+      const remaining = totalHours - colors.length;
+      pushColor(remaining, '#e5e7eb'); // Fill rest with light gray
+
+      chart.data.labels = Array.from({ length: colors.length }, (_, i) => `${i}:00`);
+      chart.data.datasets[0].data = Array(colors.length).fill(1);
+      chart.data.datasets[0].backgroundColor = colors;
       chart.update();
 
       validate();
@@ -140,17 +146,21 @@
 
       const driveLimit = adverseEnabled ? 13 : 11;
 
-      if (driveHrs > driveLimit) warningText += `Exceeds ${driveLimit}-hour driving limit (Adverse ${adverseEnabled ? 'ON' : 'OFF'}).\n`;
-      if (driveHrs + dutyHrs > 14) warningText += "Exceeds 14-hour work shift.\n";
+      if (driveHrs > driveLimit) warningText += `Exceeds ${driveLimit}-hour driving limit (Adverse ${adverseEnabled ? 'ON' : 'OFF'}).
+`;
+      if (driveHrs + dutyHrs > 14) warningText += "Exceeds 14-hour work shift.
+";
 
       if (!shortHaulEnabled && driveHrs > 8 && breakHrs < 0.5) {
-        warningText += "Must take 30-minute break after 8 hrs driving.\n";
+        warningText += "Must take 30-minute break after 8 hrs driving.
+";
       }
 
       if (splitOpt !== 'none') {
         const [part1, part2] = splitOpt.split('-').map(Number);
         if (!(offHrs >= part1 || offHrs >= part2)) {
-          warningText += `Split berth ${splitOpt} requires at least ${part1} and ${part2} hours of rest.\n`;
+          warningText += `Split berth ${splitOpt} requires at least ${part1} and ${part2} hours of rest.
+`;
         }
       }
 
