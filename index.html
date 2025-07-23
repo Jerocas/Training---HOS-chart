@@ -2,16 +2,17 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>HOS Interactive Chart</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-100 p-4 md:p-6">
+<body class="bg-gray-100 p-6">
   <div class="max-w-5xl mx-auto">
     <h1 class="text-2xl font-bold mb-4">Driver HOS Log</h1>
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <!-- Controls -->
       <div class="space-y-4">
         <div>
           <label class="block font-medium">Driving Time (hrs)</label>
@@ -48,19 +49,21 @@
 
         <div class="flex items-center space-x-2">
           <input type="checkbox" id="adverse" class="accent-blue-500">
-          <label for="adverse" class="font-medium">Adverse Conditions Exemption (Add 2 extra driving hrs)</label>
+          <label for="adverse" class="font-medium">Adverse Conditions (Add 2 hrs driving)</label>
         </div>
 
         <div class="flex items-center space-x-2">
           <input type="checkbox" id="shorthaul" class="accent-blue-500">
-          <label for="shorthaul" class="font-medium">Short-Haul Exemption (Skip 30-min break rule)</label>
+          <label for="shorthaul" class="font-medium">Short-Haul Exemption (Skip 30-min break)</label>
         </div>
 
         <div class="mt-4 text-red-600 font-semibold whitespace-pre-line" id="warnings"></div>
+        <div class="mt-2 text-green-600 font-semibold whitespace-pre-line" id="split-gain"></div>
       </div>
 
+      <!-- Chart -->
       <div class="bg-white p-4 rounded shadow">
-        <canvas id="timeline" width="400" height="200"></canvas>
+        <canvas id="timeline" height="200"></canvas>
       </div>
     </div>
   </div>
@@ -74,6 +77,7 @@
     const adverse = document.getElementById('adverse');
     const shorthaul = document.getElementById('shorthaul');
     const warnings = document.getElementById('warnings');
+    const splitGain = document.getElementById('split-gain');
 
     const updateVals = () => {
       document.getElementById('drive-val').textContent = drive.value;
@@ -83,35 +87,25 @@
     };
 
     const ctx = document.getElementById('timeline').getContext('2d');
-    let chart;
-
-    const initChart = () => {
-      chart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-          labels: Array.from({ length: 24 }, (_, i) => `${i}:00`),
-          datasets: [{
-            label: 'Activity',
-            data: Array(24).fill(1),
-            backgroundColor: Array(24).fill('#e5e7eb'),
-            borderWidth: 0
-          }]
-        },
-        options: {
-          responsive: true,
-          plugins: {
-            legend: { display: false }
-          },
-          scales: {
-            y: { display: false },
-            x: { display: true }
-          }
-        }
-      });
-    };
+    let chart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: Array.from({ length: 24 }, (_, i) => `${i}:00`),
+        datasets: [{
+          label: 'Activity',
+          backgroundColor: Array(24).fill('#e5e7eb'),
+          data: Array(24).fill(1)
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: { y: { display: false } }
+      }
+    });
 
     const updateChart = () => {
-      const totalHours = 24;
+      const total = 24;
       const driveHrs = parseFloat(drive.value);
       const dutyHrs = parseFloat(duty.value);
       const breakHrs = parseFloat(brk.value);
@@ -122,13 +116,13 @@
         for (let i = 0; i < count; i++) colors.push(color);
       };
 
-      pushColor(driveHrs, 'rgba(59,130,246,0.7)'); // Driving - blue
-      pushColor(dutyHrs, 'rgba(251,191,36,0.7)'); // On Duty - yellow
-      pushColor(breakHrs, 'rgba(34,197,94,0.7)'); // Break - green
-      pushColor(offHrs, 'rgba(107,114,128,0.7)'); // Off Duty - gray
-      pushColor(totalHours - colors.length, '#e5e7eb'); // Remaining - light gray
+      pushColor(driveHrs, 'rgba(59,130,246,0.7)');
+      pushColor(dutyHrs, 'rgba(251,191,36,0.7)');
+      pushColor(breakHrs, 'rgba(34,197,94,0.7)');
+      pushColor(offHrs, 'rgba(107,114,128,0.7)');
+      pushColor(total - colors.length, '#e5e7eb');
 
-      chart.data.datasets[0].backgroundColor = colors;
+      chart.data.datasets[0].backgroundColor = colors.slice(0, 24);
       chart.update();
 
       validate();
@@ -136,6 +130,7 @@
 
     const validate = () => {
       let warningText = "";
+      let gainText = "";
       const driveHrs = parseFloat(drive.value);
       const dutyHrs = parseFloat(duty.value);
       const breakHrs = parseFloat(brk.value);
@@ -144,9 +139,10 @@
       const adverseEnabled = adverse.checked;
       const shortHaulEnabled = shorthaul.checked;
 
-      const driveLimit = adverseEnabled ? 13 : 11;
+      let driveLimit = adverseEnabled ? 13 : 11;
+      let splitValid = false;
 
-      if (driveHrs > driveLimit) warningText += `Exceeds ${driveLimit}-hour driving limit (Adverse ${adverseEnabled ? 'ON' : 'OFF'}).\n`;
+      if (driveHrs > driveLimit) warningText += `Exceeds ${driveLimit}-hour driving limit.\n`;
       if (driveHrs + dutyHrs > 14) warningText += "Exceeds 14-hour work shift.\n";
 
       if (!shortHaulEnabled && driveHrs > 8 && breakHrs < 0.5) {
@@ -154,24 +150,27 @@
       }
 
       if (splitOpt !== 'none') {
-        const [part1, part2] = splitOpt.split('-').map(Number);
-        if (!(offHrs >= part1 || offHrs >= part2)) {
-          warningText += `Split berth ${splitOpt} requires at least ${part1} and ${part2} hours of rest.\n`;
+        const [p1, p2] = splitOpt.split('-').map(Number);
+        if (offHrs >= p1 || offHrs >= p2) {
+          splitValid = true;
+          gainText = `Split Sleeper: You regain ${p1 + p2} hours of driving/work time.`;
+        } else {
+          warningText += `Split ${splitOpt} requires at least ${p1} and ${p2} hrs rest.\n`;
         }
       }
 
       warnings.textContent = warningText.trim();
+      splitGain.textContent = gainText.trim();
     };
 
-    [drive, duty, brk, off, split, adverse, shorthaul].forEach(el => {
-      el.addEventListener('input', () => {
+    [drive, duty, brk, off, split, adverse, shorthaul].forEach(input => {
+      input.addEventListener('input', () => {
         updateVals();
         updateChart();
       });
     });
 
     updateVals();
-    initChart();
     updateChart();
   </script>
 </body>
